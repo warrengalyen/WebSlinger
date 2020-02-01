@@ -65,6 +65,13 @@ class HTTP {
 			$url = substr($url, 2);
 			$pos = strpos($url, "/");
 			if ($pos !== false) {
+				$result["path"] = substr($url, $pos);
+				$url            = substr($url, 0, $pos);
+			}
+			$result["authority"] = $url;
+
+			$pos = strpos($url, "@");
+			if ($pos !== false) {
 				$result["login"] = substr($url, 0, $pos);
 				$url             = substr($url, $pos + 1);
 				$pos             = strpos($result["login"], ":");
@@ -78,7 +85,7 @@ class HTTP {
 
 			$pos = strpos($url, "]");
 			if (substr($url, 0, 1) == "[" && $pos !== false) {
-				// IPV6 literal address.
+				// IPv6 literal address.
 				$result["host"] = substr($url, 0, $pos + 1);
 				$url            = substr($url, $pos + 1);
 
@@ -88,7 +95,7 @@ class HTTP {
 					$url            = substr($url, 0, $pos);
 				}
 			} else {
-				// Normal host[:port]
+				// Normal host[:port].
 				$pos = strpos($url, ":");
 				if ($pos !== false) {
 					$result["port"] = substr($url, $pos + 1);
@@ -106,7 +113,7 @@ class HTTP {
 	public static function CondenseURL($data) {
 		$result = "";
 		if (isset($data["host"]) && $data["host"] != "") {
-			if (isset($data["scheme"]) && $data["scheme"] !== "") {
+			if (isset($data["scheme"]) && $data["scheme"] != "") {
 				$result = $data["scheme"] . "://";
 			}
 			if (isset($data["loginusername"]) && $data["loginusername"] != "" && isset($data["loginpassword"])) {
@@ -263,7 +270,7 @@ class HTTP {
 	public static function GetSSLCiphers($type = "intermediate") {
 		$type = strtolower($type);
 
-		// Cipher list last updated May 3, 2017
+		// Cipher list last updated May 3, 2017.
 		if ($type == "modern") {
 			return "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256";
 		} else if ($type == "old") {
@@ -292,7 +299,7 @@ class HTTP {
 		return $result;
 	}
 
-	// Reasonably parse RFC1123, RFC850, and asctime() dates.
+	// Reasonably parses RFC1123, RFC850, and asctime() dates.
 	public static function GetDateTimestamp($httpdate) {
 		$timestamp_map = array(
 			"jan" => 1,
@@ -391,7 +398,7 @@ class HTTP {
 		$result = array();
 		$data   = trim($data);
 		while ($data != "") {
-			// Extract name/value pai.
+			// Extract name/value pair.
 			$pos  = strpos($data, "=");
 			$pos2 = strpos($data, ";");
 			if (($pos !== false && $pos2 === false) || ($pos !== false && $pos2 !== false && $pos < $pos2)) {
@@ -422,10 +429,10 @@ class HTTP {
 						$data  = "";
 					}
 				}
-			} else if ($pos != false) {
+			} else if ($pos2 !== false) {
 				$name  = "";
 				$value = trim(substr($data, 0, $pos2));
-				$data  = substr($data, $pos + 1);
+				$data  = substr($data, $pos2 + 1);
 			} else {
 				$name  = "";
 				$value = $data;
@@ -452,6 +459,7 @@ class HTTP {
 			} else if (file_exists(str_replace("\\", "/", dirname(__FILE__)) . "/cacert.pem")) {
 				$options[$key]["cafile"] = str_replace("\\", "/", dirname(__FILE__)) . "/cacert.pem";
 			}
+		}
 
 			if (isset($options[$key]["auto_cn_match"])) {
 				unset($options[$key]["auto_cn_match"]);
@@ -467,13 +475,12 @@ class HTTP {
 			if (isset($options[$key]["auto_sni"])) {
 				unset($options[$key]["auto_sni"]);
 
-				$options[$key]["SNI_enabled"] = true;
-				if (!isset($options["headers"]["Host"])) {
-					$options[$key]["SNI_server_name"] = $host;
-				} else {
-					$info                             = self::ExtractURL("https://" . $options["headers"]["Host"]);
-					$options[$key]["SNI_server_name"] = $info["host"];
-				}
+			$options[$key]["SNI_enabled"] = true;
+			if (!isset($options["headers"]["Host"])) {
+				$options[$key]["SNI_server_name"] = $host;
+			} else {
+				$info                             = self::ExtractURL("https://" . $options["headers"]["Host"]);
+				$options[$key]["SNI_server_name"] = $info["host"];
 			}
 		}
 	}
@@ -489,7 +496,7 @@ class HTTP {
 		return $dirfile;
 	}
 
-	public static function SafeFilename($filename) {
+	public static function FilenameSafe($filename) {
 		return preg_replace('/[_]+/', "_", preg_replace('/[^A-Za-z0-9_.\-]/', "_", $filename));
 	}
 
@@ -833,7 +840,7 @@ class HTTP {
 			$state["fp"] = false;
 		}
 
-		if (isset($stae["currentfile"]) && $state["currentfile"] !== false) {
+		if (isset($state["currentfile"]) && $state["currentfile"] !== false) {
 			if ($state["currentfile"]["fp"] !== false) {
 				@fclose($state["currentfile"]["fp"]);
 			}
@@ -1105,7 +1112,7 @@ class HTTP {
 
 								$name     = self::HeaderValueCleanup($state["currentfile"]["name"]);
 								$name     = str_replace("\"", "", $name);
-								$filename = self::SafeFilename(self::ExtractFilename($state["currentfile"]["filename"]));
+								$filename = self::FilenameSafe(self::ExtractFilename($state["currentfile"]["filename"]));
 								$type     = self::HeaderValueCleanup($state["currentfile"]["type"]);
 
 								$state["data"] = "--" . $state["mime"] . "\r\n";
@@ -1592,7 +1599,7 @@ class HTTP {
 		}
 	}
 
-	private static function RawFileSize($fileorname) {
+	public static function RawFileSize($fileorname) {
 		if (is_resource($fileorname)) {
 			$fp = $fileorname;
 		} else {

@@ -1,5 +1,8 @@
 <?php
 
+// Web browser state emulation class.
+
+// Requires HTTP class for HTTP/HTTPS.
 class WebBrowser {
 
 	private $data, $html;
@@ -52,24 +55,24 @@ class WebBrowser {
 
 					$filename = HTTP::ExtractFilename($state["urlinfo"]["path"]);
 					$pos      = strrpos($filename, ".");
-					$file_ext = ($pos !== false ? strtolower(substr($filename, $pos + 1)) : "");
+					$fileext  = ($pos !== false ? strtolower(substr($filename, $pos + 1)) : "");
 
-					// Setup up some standard headers.
+					// Set up some standard headers.
 					$headers     = array();
 					$profile     = strtolower($state["profile"]);
 					$tempprofile = explode("-", $profile);
 					if (count($tempprofile) == 2) {
-						$profile  = $tempprofile[0];
-						$file_ext = $tempprofile[1];
+						$profile = $tempprofile[0];
+						$fileext = $tempprofile[1];
 					}
-					if (substr($profile, 0, 2) == "ie" | ($profile == "auto" && substr($this->data["useragent"], 0, 2) == "ie")) {
-						if ($file_ext == "css") {
+					if (substr($profile, 0, 2) == "ie" || ($profile == "auto" && substr($this->data["useragent"], 0, 2) == "ie")) {
+						if ($fileext == "css") {
 							$headers["Accept"] = "text/css";
-						} else if ($file_ext == "png" || $file_ext == "jpg" || $file_ext == "jpeg" || $file_ext == "gif" || $file_ext == "svg") {
+						} else if ($fileext == "png" || $fileext == "jpg" || $fileext == "jpeg" || $fileext == "gif" || $fileext == "svg") {
 							$headers["Accept"] = "image/png, image/svg+xml, image/*;q=0.8, */*;q=0.5";
-						} else if ($file_ext == "js") {
+						} else if ($fileext == "js") {
 							$headers["Accept"] = "application/javascript, */*;q=0.8";
-						} else if ($this->data["referer"] != "" || $file_ext == "" || $file_ext == "html" || $file_ext == "xhtml" || $file_ext == "xml") {
+						} else if ($this->data["referer"] != "" || $fileext == "" || $fileext == "html" || $fileext == "xhtml" || $fileext == "xml") {
 							$headers["Accept"] = "text/html, application/xhtml+xml, */*";
 						} else {
 							$headers["Accept"] = "*/*";
@@ -77,12 +80,12 @@ class WebBrowser {
 
 						$headers["Accept-Language"] = "en-US";
 						$headers["User-Agent"]      = HTTP::GetUserAgent(substr($profile, 0, 2) == "ie" ? $profile : $this->data["useragent"]);
-					} else if ($profile = "firefox" || ($profile == "auto" && $this->data["useragent"] == "firefox")) {
-						if ($file_ext == "css") {
+					} else if ($profile == "firefox" || ($profile == "auto" && $this->data["useragent"] == "firefox")) {
+						if ($fileext == "css") {
 							$headers["Accept"] = "text/css,*/*;q=0.1";
-						} else if ($file_ext == "png" || $file_ext == "jpg" || $file_ext == "jpeg" || $file_ext == "gif" || $file_ext == "svg") {
+						} else if ($fileext == "png" || $fileext == "jpg" || $fileext == "jpeg" || $fileext == "gif" || $fileext == "svg") {
 							$headers["Accept"] = "image/png,image/*;q=0.8,*/*;q=0.5";
-						} else if ($file_ext == "js") {
+						} else if ($fileext == "js") {
 							$headers["Accept"] = "*/*";
 						} else {
 							$headers["Accept"] = "text/html, application/xhtml+xml, */*";
@@ -98,9 +101,9 @@ class WebBrowser {
 						$headers["Cache-Control"]   = "no-cache";
 						$headers["User-Agent"]      = HTTP::GetUserAgent("opera");
 					} else if ($profile == "safari" || $profile == "chrome" || ($profile == "auto" && ($this->data["useragent"] == "safari" || $this->data["useragent"] == "chrome"))) {
-						if ($file_ext == "css") {
+						if ($fileext == "css") {
 							$headers["Accept"] = "text/css,*/*;q=0.1";
-						} else if ($file_ext == "png" || $file_ext == "jpg" || $file_ext == "jpeg" || $file_ext == "gif" || $file_ext == "svg" || $file_ext == "js") {
+						} else if ($fileext == "png" || $fileext == "jpg" || $fileext == "jpeg" || $fileext == "gif" || $fileext == "svg" || $fileext == "js") {
 							$headers["Accept"] = "*/*";
 						} else {
 							$headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
@@ -122,7 +125,7 @@ class WebBrowser {
 					$host = (isset($headers["Host"]) ? $headers["Host"] : $state["urlinfo"]["host"]);
 					$pos  = strpos($host, "]");
 					if (substr($host, 0, 1) == "[" && $pos !== false) {
-						$host = subtr($host, 0, $pos + 1);
+						$host = substr($host, 0, $pos + 1);
 					} else {
 						$pos = strpos($host, ":");
 						if ($pos !== false) {
@@ -264,7 +267,7 @@ class WebBrowser {
 				{
 					// Set up structures for another round.
 					if ($this->data["autoreferer"]) {
-						$this->data["refer"] = $state["url"];
+						$this->data["referer"] = $state["url"];
 					}
 					if (isset($state["result"]["headers"]["Location"]) && $this->data["followlocation"]) {
 						$state["redirectts"] = microtime(true);
@@ -279,8 +282,8 @@ class WebBrowser {
 						$state["url"]                               = $state["result"]["headers"]["Location"][0];
 
 						// Generate an absolute URL.
-						if ($this->data["refer"] != "") {
-							$state["url"] = HTTP::ConvertRelativeToAbsoluteURL($this->data["refer"], $state["url"]);
+						if ($this->data["referer"] != "") {
+							$state["url"] = HTTP::ConvertRelativeToAbsoluteURL($this->data["referer"], $state["url"]);
 						}
 
 						$urlinfo2 = HTTP::ExtractURL($state["url"]);
@@ -377,7 +380,6 @@ class WebBrowser {
 					}
 
 					break;
-
 				}
 			}
 		}
@@ -421,6 +423,14 @@ class WebBrowser {
 		$numredirects     = 0;
 		$totalrawsendsize = 0;
 
+		if (!isset($tempoptions["headers"])) {
+			$tempoptions["headers"] = array();
+		}
+		$tempoptions["headers"] = HTTP::NormalizeHeaders($tempoptions["headers"]);
+		if (isset($tempoptions["headers"]["Referer"])) {
+			$this->data["referer"] = $tempoptions["headers"]["Referer"];
+		}
+
 		// If a referrer is specified, use it to generate an absolute URL.
 		if ($this->data["referer"] != "") {
 			$url = HTTP::ConvertRelativeToAbsoluteURL($this->data["referer"], $url);
@@ -451,7 +461,7 @@ class WebBrowser {
 		// Run at least one state cycle to properly initialize the state array.
 		$result = $this->ProcessState($state);
 
-		// Return the state for async call. Caller must call ProcessState();
+		// Return the state for async calls. Caller must call ProcessState().
 		if ($state["async"]) {
 			return array("success" => true, "state" => $state);
 		}
@@ -460,7 +470,7 @@ class WebBrowser {
 	}
 
 	// Implements the correct MultiAsyncHelper responses for WebBrowser instances.
-	public function ProcessAsync__Handler($mode, &$data, &$key, &$info) {
+	public function ProcessAsync__Handler($mode, &$data, $key, &$info) {
 		switch ($mode) {
 			case "init":
 			{
@@ -565,7 +575,7 @@ class WebBrowser {
 		$lasthint = "";
 		$hintmap  = array();
 		if ($this->html === false) {
-			if (!class_exits("simple_html_dom", false)) {
+			if (!class_exists("simple_html_dom", false)) {
 				require_once str_replace("\\", "/", dirname(__FILE__)) . "/simple_html_dom.php";
 			}
 
@@ -574,7 +584,7 @@ class WebBrowser {
 		$this->html->load($data);
 		$rows = $this->html->find("label[for]");
 		foreach ($rows as $row) {
-			$hintmap[trim($row->for)] = trim($row->plainttext);
+			$hintmap[trim($row->for)] = trim($row->plaintext);
 		}
 		$html5rows = $this->html->find("input[form],textarea[form],select[form],button[form],datalist[id]" . ($hint !== false ? "," . $hint : ""));
 		$rows      = $this->html->find("form");
@@ -610,12 +620,12 @@ class WebBrowser {
 			// Handle HTML5.
 			if (isset($info["id"]) && $info["id"] != "") {
 				foreach ($html5rows as $row2) {
-					if (strpos(" " . $info["id"] . " ", " " > $row2->form . " ") !== false) {
+					if (strpos(" " . $info["id"] . " ", " " . $row2->form . " ") !== false) {
 						if (isset($hintmap[$info["id"]])) {
 							$lasthint = $hintmap[$info["id"]];
 						}
 
-						$this->ExtractFieldFromDom($fields, $rows2, $lasthint);
+						$this->ExtractFieldFromDOM($fields, $row2, $lasthint);
 					}
 				}
 			}
@@ -824,7 +834,6 @@ class WebBrowser {
 
 		if (count($form->GetVisibleFields(false))) {
 			echo self::WBTranslate("Select form fields by field number to edit a field.  When ready to submit the form, leave 'Field number' empty.\n\n");
-		}
 
 		do {
 			echo self::WBTranslate("Editable form fields:\n");
@@ -898,7 +907,8 @@ class WebBrowser {
 
 			echo "\n";
 
-		} while (1);
+			} while (1);
+		}
 
 		$submitoptions = array(
 			array(
@@ -1198,3 +1208,5 @@ class WebBrowserForm {
 		return $result;
 	}
 }
+
+?>

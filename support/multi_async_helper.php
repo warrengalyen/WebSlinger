@@ -4,12 +4,12 @@
 
 class MultiAsyncHelper {
 
-	private $objs, $queued_objs, $limits;
+	private $objs, $queued_objs, $limit;
 
 	public function __construct() {
 		$this->objs        = array();
 		$this->queued_objs = array();
-		$this->limits      = false;
+		$this->limit       = false;
 	}
 
 	public function SetConcurrencyLimit($limit) {
@@ -37,7 +37,7 @@ class MultiAsyncHelper {
 		return $result;
 	}
 
-	// To bo able to change a callback on the fly.
+	// To be able to change a callback on the fly.
 	public function SetCallback($key, $callback) {
 		if (is_callable($callback)) {
 			if (isset($this->queuedobjs[$key])) {
@@ -235,12 +235,12 @@ class MultiAsyncHelper {
 
 		// Wait for something to happen.
 		if (isset($readfps) || isset($writefps)) {
-			if ($timeout == false) {
+			if ($timeout === false) {
 				$timeout = null;
 			}
 			$readfps2  = $readfps;
 			$writefps2 = $writefps;
-			$result = @stream_select($readfps, $writefps, $exceptfps, $timeout);
+			$result    = @stream_select($readfps, $writefps, $exceptfps, $timeout);
 			if ($result === false) {
 				return array(
 					"success"   => false,
@@ -274,22 +274,24 @@ class MultiAsyncHelper {
 					$result2["read"] = $readfps3;
 				}
 
-				if (isset($writefps))
-				{
+				if (isset($writefps)) {
 					$writefps3 = array();
-					foreach ($writefps as $key => $fp)
-					{
-						if (!isset($writefps2[$key]) || $writefps2[$key] !== $fp)
-						{
-							foreach ($writefps2 as $key2 => $fp2)
-							{
-								if ($fp === $fp2)  $key = $key2;
+					foreach ($writefps as $key => $fp) {
+						if (!isset($writefps2[$key]) || $writefps2[$key] !== $fp) {
+							foreach ($writefps2 as $key2 => $fp2) {
+								if ($fp === $fp2) {
+									$key = $key2;
+								}
 							}
 						}
 
-						if (isset($this->objs[$key]))
-						{
-							call_user_func_array($info["callback"], array("write", &$fp, $key, &$this->objs[$key]["obj"]));
+						if (isset($this->objs[$key])) {
+							call_user_func_array($info["callback"], array(
+								"write",
+								&$fp,
+								$key,
+								&$this->objs[$key]["obj"]
+							));
 
 							$readfps3[$key] = $fp;
 						}
@@ -300,15 +302,17 @@ class MultiAsyncHelper {
 			}
 		}
 
-		$readfps2["numleft"] = count($this->queued_objs) + count($this->objs);
+		$result2["numleft"] = count($this->queued_objs) + count($this->objs);
 
 		return $result2;
 	}
 
 	public static function MAHTranslate() {
 		$args = func_get_args();
-		if (!count($args)) return "";
+		if (!count($args)) {
+			return "";
+		}
 
-		return call_user_func_array((defined("CS_TRANSLATE_FUNC") && function_exists(CSS_TRANSLATE_FUNC) ? CS_TRANSLATE_FUNC : "sprintf"), $args);
+		return call_user_func_array((defined("CS_TRANSLATE_FUNC") && function_exists(CS_TRANSLATE_FUNC) ? CS_TRANSLATE_FUNC : "sprintf"), $args);
 	}
 }
