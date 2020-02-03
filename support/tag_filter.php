@@ -1395,6 +1395,7 @@ class TagFilterNodes {
 		$numrules = count($rules);
 
 		$result      = array();
+		$childcache  = array();
 		$oftypecache = array();
 		$rootid      = $id;
 		$pos         = 0;
@@ -1472,6 +1473,28 @@ class TagFilterNodes {
 										);
 									}
 
+									if (substr($rules[$x][$x2]["pseudo"], - 6) === "-child") {
+										if (!isset($childcache[$id2])) {
+											$children = 0;
+											foreach ($this->nodes[$pid]["children"] as $id3) {
+												if ($this->nodes[$id3]["type"] === "element") {
+													$childcache[$id3] = array("cx" => $children);
+
+													$children ++;
+												}
+											}
+
+											foreach ($this->nodes[$pid]["children"] as $id3) {
+												if ($this->nodes[$id3]["type"] === "element") {
+													$childcache[$id3]["cy"] = $children;
+												}
+											}
+										}
+
+										$cx = $childcache[$id2]["cx"];
+										$cy = $childcache[$id2]["cy"];
+									}
+
 									if (substr($rules[$x][$x2]["pseudo"], - 8) === "-of-type") {
 										if (!isset($oftypecache[$id2])) {
 											$types = array();
@@ -1502,18 +1525,33 @@ class TagFilterNodes {
 
 									switch ($rules[$x][$x2]["pseudo"]) {
 										case "first-child":
-											$backtrack = ($this->nodes[$id2]["parentpos"] !== 0);
+											$backtrack = ($cx !== 0);
 											break;
 										case "last-child":
-											$backtrack = ($this->nodes[$id2]["parentpos"] !== $pnum - 1);
+											$backtrack = ($cx !== $cy - 1);
 											break;
 										case "only-child":
-											$backtrack = ($pnum !== 1);
+											$backtrack = ($cy !== 1);
 											break;
 										case "nth-child":
-											$px = $this->nodes[$id2]["parentpos"];
+											$px = $cx;
 											break;
 										case "nth-last-child":
+											$px = $cy - $cx - 1;
+											break;
+										case "first-child-all":
+											$backtrack = ($this->nodes[$id2]["parentpos"] !== 0);
+											break;
+										case "last-child-all":
+											$backtrack = ($this->nodes[$id2]["parentpos"] !== $pnum - 1);
+											break;
+										case "only-child-all":
+											$backtrack = ($pnum !== 1);
+											break;
+										case "nth-child-all":
+											$px = $this->nodes[$id2]["parentpos"];
+											break;
+										case "nth-last-child-all":
 											$px = $pnum - $this->nodes[$id2]["parentpos"] - 1;
 											break;
 										case "first-of-type":
@@ -1633,14 +1671,16 @@ class TagFilterNodes {
 										if ($rules[$x][$x2]["combine"] === "any-parent") {
 											$id2 = $rules[$x][$x2]["lastid"];
 											if ($id2 !== $rootid && $this->nodes[$id2]["parent"]) {
-												$id2 = $this->nodes[$id2]["parent"];
+												$id2                      = $this->nodes[$id2]["parent"];
+												$rules[$x][$x2]["lastid"] = $id2;
 
 												break;
 											}
 										} else if ($rules[$x][$x2]["combine"] === "any-prev-sibling") {
 											$id2 = $rules[$x][$x2]["lastid"];
 											if ($this->nodes[$id2]["parentpos"] != 0) {
-												$id2 = $this->nodes[$this->nodes[$id2]["parent"]]["children"][$this->nodes[$id2]["parentpos"] - 1];
+												$id2                      = $this->nodes[$this->nodes[$id2]["parent"]]["children"][$this->nodes[$id2]["parentpos"] - 1];
+												$rules[$x][$x2]["lastid"] = $id2;
 
 												break;
 											}
