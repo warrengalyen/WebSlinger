@@ -1123,7 +1123,7 @@ class TagFilterNode {
 	}
 }
 
-class TagFilterNodeIterator implements Iterator {
+class TagFilterNodeIterator implements Iterator, Countable {
 	private $tfn, $ids, $x, $y;
 
 	public function __construct($tfn, $ids) {
@@ -1151,6 +1151,10 @@ class TagFilterNodeIterator implements Iterator {
 
 	public function next() {
 		$this->x ++;
+	}
+
+	public function count() {
+		return $this->y;
 	}
 
 	public function Filter($query, $cachequery = true) {
