@@ -73,6 +73,8 @@ class TagFilterStream {
 		$z                = ord("Z");
 		$z2               = ord("z");
 		$hyphen           = ord("-");
+		$underscore       = ord("_");
+		$period           = ord(".");
 		$colon            = ord(":");
 		$zero             = ord("0");
 		$nine             = ord("9");
@@ -191,7 +193,7 @@ class TagFilterStream {
 				$cx      = $startpos;
 				for (; $cx < $cy; $cx ++) {
 					$val = ord($content{$cx});
-					if (!(($val >= $a && $val <= $z) || ($val >= $a2 && $val <= $z2) || ($cx > $startpos && $val >= $zero && $val <= $nine) || ($this->options["allow_namespaces"] && $val == $colon))) {
+					if (!(($val >= $a && $val <= $z) || ($val >= $a2 && $val <= $z2) || ($cx > $startpos && (($val >= $zero && $val <= $nine) || $val == $hyphen || $val == $underscore || $val == $period)) || ($this->options["allow_namespaces"] && $val == $colon))) {
 						break;
 					}
 				}
@@ -256,13 +258,13 @@ class TagFilterStream {
 				}
 
 				// Process attributes/properties until a closing condition is encountered.
-				$state   = "key";
+				$state   = "name";
 				$voidtag = false;
 				$attrs   = array();
 				do {
 //echo "State:  " . $state . "\n";
 //echo "Content:\n" . $content . "\n";
-					if ($state === "key") {
+					if ($state === "name") {
 						// Find attribute key/property.
 						for ($x = $cx; $x < $cy; $x ++) {
 							if ($content{$x} === ">" || $content{$x} === "<") {
@@ -319,7 +321,7 @@ class TagFilterStream {
 
 									for (; $cx < $cy; $cx ++) {
 										$val = ord($content{$cx});
-										if (!(($val >= $a && $val <= $z) || ($val >= $a2 && $val <= $z2) || ($cx > $x && $val >= $zero && $val <= $nine) || ($cx > $x && $val == $hyphen) || ($this->options["allow_namespaces"] && $val == $colon))) {
+										if (!(($val >= $a && $val <= $z) || ($val >= $a2 && $val <= $z2) || ($cx > $x && (($val >= $zero && $val <= $nine) || $val == $hyphen || $val == $underscore || $val == $period)) || ($this->options["allow_namespaces"] && $val == $colon))) {
 											break;
 										}
 									}
@@ -336,7 +338,7 @@ class TagFilterStream {
 							}
 						}
 
-						if ($state === "key") {
+						if ($state === "name") {
 							$cx = $cy;
 
 							$state = "exit";
@@ -363,7 +365,7 @@ class TagFilterStream {
 
 								$attrs[$keyname] = true;
 
-								$state = "key";
+								$state = "name";
 
 								break;
 							} else {
@@ -373,7 +375,7 @@ class TagFilterStream {
 
 									$attrs[$keyname] = true;
 
-									$state = "key";
+									$state = "name";
 
 									break;
 								}
@@ -405,7 +407,7 @@ class TagFilterStream {
 									$value = substr($content, $x + 1, $pos - $x - 1);
 									$cx    = $pos + 1;
 
-									$state = "key";
+									$state = "name";
 								}
 
 								break;
@@ -420,7 +422,7 @@ class TagFilterStream {
 
 								$value = substr($content, $x, $cx - $x);
 
-								$state = "key";
+								$state = "name";
 
 								break;
 							}
@@ -434,7 +436,7 @@ class TagFilterStream {
 							$state = "exit";
 						}
 
-						if ($state === "key") {
+						if ($state === "name") {
 							$value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, $this->options["charset"]);
 
 							// Decode remaining entities.
