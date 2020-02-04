@@ -641,6 +641,9 @@ class TagFilterStream {
 						if (!isset($funcresult["post_tag"])) {
 							$funcresult["post_tag"] = "";
 						}
+						if (!isset($funcresult["state"])) {
+							$funcresult["state"] = false;
+						}
 					}
 
 					if ($open && $funcresult["keep_tag"]) {
@@ -676,7 +679,8 @@ class TagFilterStream {
 								"open_tag"      => $opentag,
 								"close_tag"     => true,
 								"keep_interior" => $funcresult["keep_interior"],
-								"post_tag"      => $funcresult["post_tag"]
+								"post_tag"      => $funcresult["post_tag"],
+								"state"         => $funcresult["state"]
 							));
 							$result = "";
 
@@ -700,7 +704,8 @@ class TagFilterStream {
 								"open_tag"      => "",
 								"close_tag"     => false,
 								"keep_interior" => $funcresult["keep_interior"],
-								"post_tag"      => $funcresult["post_tag"]
+								"post_tag"      => $funcresult["post_tag"],
+								"state"         => $funcresult["state"]
 							));
 							$result = "";
 						}
