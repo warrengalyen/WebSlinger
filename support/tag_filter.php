@@ -1643,9 +1643,9 @@ class TagFilterNodes
 				if ($maxpos && $this->nodes[$id]["type"] === "element")
 				{
 					if (($include || $rootid != $id) && isset($types[$this->nodes[$id]["type"]]))  $result .= "</" . $this->nodes[$id]["tag"] . ">";
-
-					if (isset($options["post_elements"][$this->nodes[$id]["type"]]))  $result .= $options["post_elements"][$this->nodes[$id]["type"]];
 				}
+
+				if ($this->nodes[$id]["type"] === "element" && isset($options["post_elements"][$this->nodes[$id]["tag"]]))  $result .= $options["post_elements"][$this->nodes[$id]["tag"]];
 
 				if ($rootid === $id)  break;
 
