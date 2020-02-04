@@ -350,7 +350,7 @@ class WebSocket {
 	}
 
 	// A mostly internal function.  Useful for managing multiple simultaneous WebSocket connections.
-	public function ProcessQueuesAndTimeoutState($read, $write) {
+	public function ProcessQueuesAndTimeoutState($read, $write, $readsize = 65536) {
 		if ($this->fp === false || $this->state === self::STATE_CONNECTING) {
 			return array("success"   => false,
 			             "error"     => self::WSTranslate("Connection not established."),
@@ -359,7 +359,7 @@ class WebSocket {
 		}
 
 		if ($read) {
-			$result = @fread($this->fp, 65536);
+			$result = @fread($this->fp, $readsize);
 			if ($result === false || ($result === "" && feof($this->fp))) {
 				return array("success"   => false,
 				             "error"     => self::WSTranslate("ProcessQueuesAndTimeoutState() failed due to fread() failure.  Most likely cause:  Connection failure."),
