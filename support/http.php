@@ -600,39 +600,36 @@ class HTTP {
 	// Handles partially read input.  Also deals with the hacky workaround to the second bugfix in ProcessState__WriteData().
 	private static function ProcessState__InternalRead(&$state, $size, $endchar = false) {
 		$y = strlen($state["nextread"]);
-		if ($size <= $y) {
-			if ($endchar === false) {
-				$pos = $size;
-			} else {
-				$pos = strpos($state["nextread"], $endchar);
-				if ($pos === false) {
+
+		do {
+			if ($size <= $y) {
+				if ($endchar === false) {
 					$pos = $size;
 				} else {
-					$pos ++;
+					$pos = strpos($state["nextread"], $endchar);
+					if ($pos === false || $pos > $size) {
+						$pos = $size;
+					} else {
+						$pos ++;
+					}
 				}
-			}
 
-			$data              = substr($state["nextread"], 0, $pos);
-			$state["nextread"] = (string) substr($state["nextread"], $pos);
-
-			return $data;
-		}
-
-		if ($endchar !== false) {
-			$pos = strpos($state["nextread"], $endchar);
-			if ($pos !== false) {
-				$data              = substr($state["nextread"], 0, $pos + 1);
-				$state["nextread"] = (string) substr($state["nextread"], $pos + 1);
+				$data              = substr($state["nextread"], 0, $pos);
+				$state["nextread"] = (string) substr($state["nextread"], $pos);
 
 				return $data;
 			}
-		}
 
-		$data              = $state["nextread"];
-		$state["nextread"] = "";
-		$size              -= $y;
+			if ($endchar !== false) {
+				$pos = strpos($state["nextread"], $endchar);
+				if ($pos !== false) {
+					$data              = substr($state["nextread"], 0, $pos + 1);
+					$state["nextread"] = (string) substr($state["nextread"], $pos + 1);
 
-		do {
+					return $data;
+				}
+			}
+
 			if ($state["debug"]) {
 				$data2 = fread($state["fp"], $size);
 			} else {
@@ -640,27 +637,36 @@ class HTTP {
 			}
 
 			if ($data2 === false || $data2 === "") {
-				return ($data !== "" ? $data : $data2);
-			}
-
-			if ($endchar !== false) {
-				$pos = strpos($data2, $endchar);
-				if ($pos !== false) {
-					$data              .= substr($data2, 0, $pos + 1);
-					$state["nextread"] = (string) substr($data2, $pos + 1);
-
-					return $data;
+				if ($state["nextread"] === "") {
+					return $data2;
 				}
+
+				if ($state["async"] && $endchar !== false && $data2 === "") {
+					return "";
+				}
+
+				$data              = $state["nextread"];
+				$state["nextread"] = "";
+
+				return $data;
 			}
 
-			$data .= $data2;
-			$size -= strlen($data2);
-		} while ($size > 0 && $endchar !== false);
+			$state["nextread"] .= $data2;
+
+			$y = strlen($state["nextread"]);
+		} while (!$state["async"] || ($size <= $y) || ($endchar !== false && strpos($state["nextread"], $endchar) !== false));
+
+		if ($endchar !== false) {
+			return "";
+		}
+
+		$data              = $state["nextread"];
+		$state["nextread"] = "";
 
 		return $data;
 	}
 
-	// Reads one or more lines in.
+	// Reads one line.
 	private static function ProcessState__ReadLine(&$state) {
 		while (strpos($state["data"], "\n") === false) {
 			$data2 = self::ProcessState__InternalRead($state, 116000, "\n");
