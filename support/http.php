@@ -599,7 +599,12 @@ class HTTP {
 	// Reads one or more lines in.
 	private static function ProcessState__ReadLine(&$state) {
 		while (strpos($state["data"], "\n") === false) {
-			$data2 = @fgets($state["fp"], 116000);
+			if ($state["debug"]) {
+				$data2 = fgets($state["fp"], 116000);
+			} else {
+				$data2 = @fgets($state["fp"], 116000);
+			}
+
 			if ($data2 === false || $data2 === "") {
 				if (feof($state["fp"])) {
 					return array(
@@ -686,7 +691,12 @@ class HTTP {
 	// Reads data in.
 	private static function ProcessState__ReadBodyData(&$state) {
 		while ($state["sizeleft"] === false || $state["sizeleft"] > 0) {
-			$data2 = @fread($state["fp"], ($state["sizeleft"] === false || $state["sizeleft"] > 65536 ? 65536 : $state["sizeleft"]));
+			if ($state["debug"]) {
+				$data2 = fread($state["fp"], ($state["sizeleft"] === false || $state["sizeleft"] > 65536 ? 65536 : $state["sizeleft"]));
+			} else {
+				$data2 = @fread($state["fp"], ($state["sizeleft"] === false || $state["sizeleft"] > 65536 ? 65536 : $state["sizeleft"]));
+			}
+
 			if ($data2 === false) {
 				return array(
 					"success"   => false,
@@ -787,10 +797,18 @@ class HTTP {
 				// This is a huge hack that has a pretty good chance of blocking on the socket.
 				// Peeling off up to just 4KB at a time helps to minimize that possibility.  It's better than guaranteed failure of the socket though.
 				@stream_set_blocking($state["fp"], 1);
-				$result = @fwrite($state["fp"], (strlen($state[$prefix . "data"]) > 4096 ? substr($state[$prefix . "data"], 0, 4096) : $state[$prefix . "data"]));
+				if ($state["debug"]) {
+					$result = fwrite($state["fp"], (strlen($state[$prefix . "data"]) > 4096 ? substr($state[$prefix . "data"], 0, 4096) : $state[$prefix . "data"]));
+				} else {
+					$result = @fwrite($state["fp"], (strlen($state[$prefix . "data"]) > 4096 ? substr($state[$prefix . "data"], 0, 4096) : $state[$prefix . "data"]));
+				}
 				@stream_set_blocking($state["fp"], 0);
 			} else {
-				$result = @fwrite($state["fp"], $state[$prefix . "data"]);
+				if ($state["debug"]) {
+					$result = fwrite($state["fp"], $state[$prefix . "data"]);
+				} else {
+					$result = @fwrite($state["fp"], $state[$prefix . "data"]);
+				}
 			}
 
 			if ($result === false || feof($state["fp"])) {
@@ -908,7 +926,11 @@ class HTTP {
 							$readfp   = null;
 							$writefp  = array($state["fp"]);
 							$exceptfp = array($state["fp"]);
-							$result   = @stream_select($readfp, $writefp, $exceptfp, 0);
+							if ($state["debug"]) {
+								$result = stream_select($readfp, $writefp, $exceptfp, 0);
+							} else {
+								$result = @stream_select($readfp, $writefp, $exceptfp, 0);
+							}
 							if ($result === false || count($exceptfp)) {
 								return self::CleanupErrorState($state, array(
 									"success"   => false,
@@ -1228,7 +1250,11 @@ class HTTP {
 							$readfp   = array($state["fp"]);
 							$writefp  = null;
 							$exceptfp = null;
-							$result   = @stream_select($readfp, $writefp, $exceptfp, 0);
+							if ($state["debug"]) {
+								$result = stream_select($readfp, $writefp, $exceptfp, 0);
+							} else {
+								$result = @stream_select($readfp, $writefp, $exceptfp, 0);
+							}
 							if ($result === false) {
 								return self::CleanupErrorState($state, array(
 									"success"   => false,
@@ -1991,7 +2017,11 @@ class HTTP {
 				$options["proxyconnecttimeout"] = min($options["proxyconnecttimeout"], $timeleft);
 			}
 			if (!function_exists("stream_socket_client")) {
-				$fp = @fsockopen($proxyprotocol . "://" . $proxyhost, $proxyport, $errornum, $errorstr, $options["proxyconnecttimeout"]);
+				if ($debug) {
+					$fp = fsockopen($proxyprotocol . "://" . $proxyhost, $proxyport, $errornum, $errorstr, $options["proxyconnecttimeout"]);
+				} else {
+					$fp = @fsockopen($proxyprotocol . "://" . $proxyhost, $proxyport, $errornum, $errorstr, $options["proxyconnecttimeout"]);
+				}
 			} else {
 				$context = @stream_context_create();
 				if (isset($options["source_ip"])) {
@@ -2006,7 +2036,12 @@ class HTTP {
 						@stream_context_set_option($context, "ssl", $key, $val);
 					}
 				}
-				$fp = @stream_socket_client($proxyprotocol . "://" . $proxyhost . ":" . $proxyport, $errornum, $errorstr, $options["proxyconnecttimeout"], (isset($options["async"]) && $options["async"] ? STREAM_CLIENT_ASYNC_CONNECT : STREAM_CLIENT_CONNECT), $context);
+
+				if ($debug) {
+					$fp = stream_socket_client($proxyprotocol . "://" . $proxyhost . ":" . $proxyport, $errornum, $errorstr, $options["proxyconnecttimeout"], (isset($options["async"]) && $options["async"] ? STREAM_CLIENT_ASYNC_CONNECT : STREAM_CLIENT_CONNECT), $context);
+				} else {
+					$fp = @stream_socket_client($proxyprotocol . "://" . $proxyhost . ":" . $proxyport, $errornum, $errorstr, $options["proxyconnecttimeout"], (isset($options["async"]) && $options["async"] ? STREAM_CLIENT_ASYNC_CONNECT : STREAM_CLIENT_CONNECT), $context);
+				}
 			}
 
 			if ($fp === false) {
@@ -2026,7 +2061,11 @@ class HTTP {
 				$options["connecttimeout"] = min($options["connecttimeout"], $timeleft);
 			}
 			if (!function_exists("stream_socket_client")) {
-				$fp = @fsockopen($protocol . "://" . $host, $port, $errornum, $errorstr, $options["connecttimeout"]);
+				if ($debug) {
+					$fp = fsockopen($protocol . "://" . $host, $port, $errornum, $errorstr, $options["connecttimeout"]);
+				} else {
+					$fp = @fsockopen($protocol . "://" . $host, $port, $errornum, $errorstr, $options["connecttimeout"]);
+				}
 			} else {
 				$context = @stream_context_create();
 				if (isset($options["source_ip"])) {
@@ -2041,7 +2080,12 @@ class HTTP {
 						@stream_context_set_option($context, "ssl", $key, $val);
 					}
 				}
-				$fp = @stream_socket_client($protocol . "://" . $host . ":" . $port, $errornum, $errorstr, $options["connecttimeout"], (isset($options["async"]) && $options["async"] ? STREAM_CLIENT_ASYNC_CONNECT : STREAM_CLIENT_CONNECT), $context);
+
+				if ($debug) {
+					$fp = stream_socket_client($protocol . "://" . $host . ":" . $port, $errornum, $errorstr, $options["connecttimeout"], (isset($options["async"]) && $options["async"] ? STREAM_CLIENT_ASYNC_CONNECT : STREAM_CLIENT_CONNECT), $context);
+				} else {
+					$fp = @stream_socket_client($protocol . "://" . $host . ":" . $port, $errornum, $errorstr, $options["connecttimeout"], (isset($options["async"]) && $options["async"] ? STREAM_CLIENT_ASYNC_CONNECT : STREAM_CLIENT_CONNECT), $context);
+				}
 			}
 
 			if ($fp === false) {
