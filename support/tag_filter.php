@@ -2686,7 +2686,14 @@ class TagFilter {
 				}
 			}
 		} else {
-			if (isset($options["htmlpurify"]["remove_empty"][substr($tagname, 1)]) && trim($content) === "") {
+			if (isset($options["htmlpurify"]["remove_empty"][substr($tagname, 1)]) && trim(str_replace(array(
+					"&nbsp;",
+					"\xC2\xA0"
+				), " ", $content)) === "") {
+				if ($content !== "") {
+					$content = " ";
+				}
+
 				return array("keep_tag" => false);
 			}
 		}
