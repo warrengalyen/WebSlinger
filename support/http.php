@@ -1,9 +1,8 @@
 <?php
 
-// HTTP Class
+// HTTP class.
 
 class HTTP {
-
 	// RFC 3986 delimiter splitting implementation.
 	public static function ExtractURL($url) {
 		$result = array(
@@ -394,6 +393,20 @@ class HTTP {
 		return $result;
 	}
 
+	public static function MergeRawHeaders(&$headers, $rawheaders) {
+		foreach ($rawheaders as $name => $val) {
+			$val = self::HeaderValueCleanup($val);
+			if ($val != "") {
+				$name2 = self::HeaderNameCleanup($name);
+				if (isset($headers[$name2])) {
+					unset($headers[$name2]);
+				}
+
+				$headers[$name] = $val;
+			}
+		}
+	}
+
 	public static function ExtractHeader($data) {
 		$result = array();
 		$data   = trim($data);
@@ -461,19 +474,19 @@ class HTTP {
 			}
 		}
 
-			if (isset($options[$key]["auto_cn_match"])) {
-				unset($options[$key]["auto_cn_match"]);
+		if (isset($options[$key]["auto_cn_match"])) {
+			unset($options[$key]["auto_cn_match"]);
 
-				if (!isset($options["headers"]["Host"])) {
-					$options[$key]["CN_match"] = $host;
-				} else {
-					$info                      = self::ExtractURL("https://" . $options["headers"]["Host"]);
-					$options[$key]["CN_match"] = $info["host"];
-				}
+			if (!isset($options["headers"]["Host"])) {
+				$options[$key]["CN_match"] = $host;
+			} else {
+				$info                      = self::ExtractURL("https://" . $options["headers"]["Host"]);
+				$options[$key]["CN_match"] = $info["host"];
 			}
+		}
 
-			if (isset($options[$key]["auto_sni"])) {
-				unset($options[$key]["auto_sni"]);
+		if (isset($options[$key]["auto_sni"])) {
+			unset($options[$key]["auto_sni"]);
 
 			$options[$key]["SNI_enabled"] = true;
 			if (!isset($options["headers"]["Host"])) {
@@ -518,7 +531,7 @@ class HTTP {
 		if ($difftime > 0.0) {
 			if ($size / $difftime > $limit) {
 				// Sleeping for some amount of time will equalize the rate.
-				// So, solve this for $x: $size / ($x + $difftime) = $limit
+				// So, solve this for $x:  $size / ($x + $difftime) = $limit
 				$amount = ($size - ($limit * $difftime)) / $limit;
 
 				if ($async) {
@@ -769,7 +782,7 @@ class HTTP {
 	// Writes data out.
 	private static function ProcessState__WriteData(&$state, $prefix) {
 		if ($state[$prefix . "data"] !== "") {
-			// Serious bug in PHP core for non-blocking SSL sockets: https://bugs.php.net/bug.php?id=72333
+			// Serious bug in PHP core for non-blocking SSL sockets:  https://bugs.php.net/bug.php?id=72333
 			if ($state["secure"] && $state["async"]) {
 				// This is a huge hack that has a pretty good chance of blocking on the socket.
 				// Peeling off up to just 4KB at a time helps to minimize that possibility.  It's better than guaranteed failure of the socket though.
@@ -1628,7 +1641,7 @@ class HTTP {
 			}
 
 			if ($size > 1) {
-				// Unfortunately, fseek() failed for some reason. Going to have to do this the old-fashioned way.
+				// Unfortunately, fseek() failed for some reason.  Going to have to do this the old-fashioned way.
 				do {
 					$data = fread($fp, 10485760);
 					if ($data === false) {
@@ -1702,6 +1715,9 @@ class HTTP {
 			$options["headers"] = array();
 		}
 		$options["headers"] = self::NormalizeHeaders($options["headers"]);
+		if (isset($options["rawheaders"])) {
+			self::MergeRawHeaders($options["headers"], $options["rawheaders"]);
+		}
 
 		// Process the proxy URL (if specified).
 		$useproxy     = (isset($options["proxyurl"]) && trim($options["proxyurl"]) != "");
@@ -1739,15 +1755,21 @@ class HTTP {
 				if ($proxyusername != "") {
 					$proxydata .= "Proxy-Authorization: BASIC " . base64_encode($proxyusername . ":" . $proxypassword) . "\r\n";
 				}
-				if (isset($options["proxyheaders"])) {
-					$options["proxyheaders"] = self::NormalizeHeaders($options["proxyheaders"]);
-					unset($options["proxyheaders"]["Accept-Encoding"]);
-					foreach ($options["proxyheaders"] as $name => $val) {
-						if ($name != "Content-Type" && $name != "Content-Length" && $name != "Proxy-Connection" && $name != "Host") {
-							$proxydata .= $name . ": " . $val . "\r\n";
-						}
+				if (!isset($options["proxyheaders"])) {
+					$options["proxyheaders"] = array();
+				}
+				$options["proxyheaders"] = self::NormalizeHeaders($options["proxyheaders"]);
+				if (isset($options["rawproxyheaders"])) {
+					self::MergeRawHeaders($options["proxyheaders"], $options["rawproxyheaders"]);
+				}
+
+				unset($options["proxyheaders"]["Accept-Encoding"]);
+				foreach ($options["proxyheaders"] as $name => $val) {
+					if ($name != "Content-Type" && $name != "Content-Length" && $name != "Proxy-Connection" && $name != "Host") {
+						$proxydata .= $name . ": " . $val . "\r\n";
 					}
 				}
+
 				$proxydata .= "\r\n";
 				if (isset($options["debug_callback"]) && is_callable($options["debug_callback"])) {
 					call_user_func_array($options["debug_callback"], array(
