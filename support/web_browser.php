@@ -21,6 +21,7 @@ class WebBrowser {
 		$this->data = array(
 			"allowedprotocols"      => array("http" => true, "https" => true),
 			"allowedredirprotocols" => array("http" => true, "https" => true),
+			"hostauths"             => array(),
 			"cookies"               => array(),
 			"referer"               => "",
 			"autoreferer"           => true,
@@ -138,6 +139,13 @@ class WebBrowser {
 						$dothost = "." . $dothost;
 					}
 					$state["dothost"] = $dothost;
+
+					// Append Authorization header.
+					if (isset($headers["Authorization"])) {
+						$this->data["hostauths"][$host] = $headers["Authorization"];
+					} else if (isset($this->data["hostauths"][$host])) {
+						$headers["Authorization"] = $this->data["hostauths"][$host];
+					}
 
 					// Append cookies and delete old, invalid cookies.
 					$secure     = ($state["urlinfo"]["scheme"] == "https");
@@ -301,6 +309,9 @@ class WebBrowser {
 						if ($urlinfo2["host"] != $state["urlinfo"]["host"]) {
 							unset($state["tempoptions"]["headers"]["Host"]);
 							unset($state["httpopts"]["headers"]["Host"]);
+
+							unset($state["httpopts"]["headers"]["Authorization"]);
+							unset($state["tempoptions"]["headers"]["Authorization"]);
 						}
 
 						$state["urlinfo"] = $urlinfo2;
@@ -395,8 +406,11 @@ class WebBrowser {
 		// Handle older function call: Process($url, $profile, $tempoptions)
 		if (is_string($tempoptions)) {
 			$args = func_get_args();
-			if (count($args) < 3) $tempoptions = array();
-			else $tempoptions = $args[2];
+			if (count($args) < 3) {
+				$tempoptions = array();
+			} else {
+				$tempoptions = $args[2];
+			}
 
 			$tempoptions["profile"] = $args[1];
 		}
@@ -568,11 +582,13 @@ class WebBrowser {
 		$tempoptions["async"] = true;
 
 		// Handle older function call:  ProcessAsync($helper, $key, $callback, $url, $profile, $tempoptions)
-		if (is_string($tempoptions))
-		{
+		if (is_string($tempoptions)) {
 			$args = func_get_args();
-			if (count($args) < 6)  $tempoptions = array();
-			else  $tempoptions = $args[5];
+			if (count($args) < 6) {
+				$tempoptions = array();
+			} else {
+				$tempoptions = $args[5];
+			}
 
 			$tempoptions["profile"] = $args[4];
 		}
@@ -859,77 +875,77 @@ class WebBrowser {
 		if (count($form->GetVisibleFields(false))) {
 			echo self::WBTranslate("Select form fields by field number to edit a field.  When ready to submit the form, leave 'Field number' empty.\n\n");
 
-		do {
-			echo self::WBTranslate("Editable form fields:\n");
-			foreach ($form->fields as $num => $field) {
-				if ($field["type"] == "input.hidden" || $field["type"] == "input.submit" || $field["type"] == "input.image" || $field["type"] == "input.button" || substr($field["type"], 0, 7) == "button.") {
-					continue;
-				}
-
-				echo self::WBTranslate("\t%d:  %s - %s\n", $num + 1, $field["name"], (is_array($field["value"]) ? json_encode($field["value"], JSON_PRETTY_PRINT) : $field["value"]) . (($field["type"] == "input.radio" || $field["type"] == "input.checkbox") ? ($field["checked"] ? self::WBTranslate(" [Y]") : self::WBTranslate(" [N]")) : "") . (isset($field["hint"]) && $field["hint"] !== "" ? " [" . $field["hint"] . "]" : ""));
-			}
-			echo "\n";
-
 			do {
-				echo self::WBTranslate("Field number:  ");
+				echo self::WBTranslate("Editable form fields:\n");
+				foreach ($form->fields as $num => $field) {
+					if ($field["type"] == "input.hidden" || $field["type"] == "input.submit" || $field["type"] == "input.image" || $field["type"] == "input.button" || substr($field["type"], 0, 7) == "button.") {
+						continue;
+					}
 
-				$num = trim(fgets(STDIN));
+					echo self::WBTranslate("\t%d:  %s - %s\n", $num + 1, $field["name"], (is_array($field["value"]) ? json_encode($field["value"], JSON_PRETTY_PRINT) : $field["value"]) . (($field["type"] == "input.radio" || $field["type"] == "input.checkbox") ? ($field["checked"] ? self::WBTranslate(" [Y]") : self::WBTranslate(" [N]")) : "") . (isset($field["hint"]) && $field["hint"] !== "" ? " [" . $field["hint"] . "]" : ""));
+				}
+				echo "\n";
+
+				do {
+					echo self::WBTranslate("Field number:  ");
+
+					$num = trim(fgets(STDIN));
+					if ($num === "") {
+						break;
+					}
+
+					$num = (int) $num - 1;
+				} while (!isset($form->fields[$num]) || $form->fields[$num]["type"] == "input.hidden" || $form->fields[$num]["type"] == "input.submit" || $form->fields[$num]["type"] == "input.image" || $form->fields[$num]["type"] == "input.button" || substr($form->fields[$num]["type"], 0, 7) == "button.");
+
 				if ($num === "") {
+					echo "\n";
+
 					break;
 				}
 
-				$num = (int) $num - 1;
-			} while (!isset($form->fields[$num]) || $form->fields[$num]["type"] == "input.hidden" || $form->fields[$num]["type"] == "input.submit" || $form->fields[$num]["type"] == "input.image" || $form->fields[$num]["type"] == "input.button" || substr($form->fields[$num]["type"], 0, 7) == "button.");
+				$field  = $form->fields[$num];
+				$prefix = (isset($field["hint"]) && $field["hint"] !== "" ? $field["hint"] . " | " : "") . $field["name"];
 
-			if ($num === "") {
-				echo "\n";
+				if ($field["type"] == "select") {
+					echo self::WBTranslate("[%s] Options:\n", $prefix);
+					foreach ($field["options"] as $key => $val) {
+						echo self::WBTranslate("\t%s:  %s\n");
+					}
 
-				break;
-			}
+					do {
+						echo self::WBTranslate("[%s] Select:  ", $prefix);
 
-			$field  = $form->fields[$num];
-			$prefix = (isset($field["hint"]) && $field["hint"] !== "" ? $field["hint"] . " | " : "") . $field["name"];
+						$select = rtrim(fgets(STDIN));
+					} while (!isset($field["options"][$select]));
 
-			if ($field["type"] == "select") {
-				echo self::WBTranslate("[%s] Options:\n", $prefix);
-				foreach ($field["options"] as $key => $val) {
-					echo self::WBTranslate("\t%s:  %s\n");
-				}
+					$form->fields[$num]["value"] = $select;
+				} else if ($field["type"] == "input.radio") {
+					$form->SetFormValue($field["name"], $field["value"], true, "input.radio");
+				} else if ($field["type"] == "input.checkbox") {
+					$form->fields[$num]["checked"] = !$field["checked"];
+				} else if ($field["type"] == "input.file") {
+					do {
+						echo self::WBTranslate("[%s] Filename:  ", $prefix);
 
-				do {
-					echo self::WBTranslate("[%s] Select:  ", $prefix);
+						$filename = rtrim(fgets(STDIN));
+					} while ($filename !== "" && !file_exists($filename));
 
-					$select = rtrim(fgets(STDIN));
-				} while (!isset($field["options"][$select]));
-
-				$form->fields[$num]["value"] = $select;
-			} else if ($field["type"] == "input.radio") {
-				$form->SetFormValue($field["name"], $field["value"], true, "input.radio");
-			} else if ($field["type"] == "input.checkbox") {
-				$form->fields[$num]["checked"] = !$field["checked"];
-			} else if ($field["type"] == "input.file") {
-				do {
-					echo self::WBTranslate("[%s] Filename:  ", $prefix);
-
-					$filename = rtrim(fgets(STDIN));
-				} while ($filename !== "" && !file_exists($filename));
-
-				if ($filename === "") {
-					$form->fields[$num]["value"] = "";
+					if ($filename === "") {
+						$form->fields[$num]["value"] = "";
+					} else {
+						$form->fields[$num]["value"] = array(
+							"filename" => $filename,
+							"type"     => "application/octet-stream",
+							"datafile" => $filename
+						);
+					}
 				} else {
-					$form->fields[$num]["value"] = array(
-						"filename" => $filename,
-						"type"     => "application/octet-stream",
-						"datafile" => $filename
-					);
+					echo self::WBTranslate("[%s] New value:  ", $prefix);
+
+					$form->fields[$num]["value"] = rtrim(fgets(STDIN));
 				}
-			} else {
-				echo self::WBTranslate("[%s] New value:  ", $prefix);
 
-				$form->fields[$num]["value"] = rtrim(fgets(STDIN));
-			}
-
-			echo "\n";
+				echo "\n";
 
 			} while (1);
 		}
