@@ -1961,7 +1961,13 @@ class HTTP {
 					"errorcode" => "proxy_transport_not_installed"
 				);
 			}
-			$proxyhost     = str_replace(" ", "-", self::HeaderValueCleanup($proxyurl["host"]));
+			$proxyhost = str_replace(" ", "-", self::HeaderValueCleanup($proxyurl["host"]));
+			if ($proxyhost === "") {
+				return array("success"   => false,
+				             "error"     => self::HTTPTranslate("The specified proxy URL is not a URL.  Prefix 'proxyurl' with http:// or https://"),
+				             "errorcode" => "invalid_proxy_url"
+				);
+			}
 			$proxyport     = ((int) $proxyurl["port"] ? (int) $proxyurl["port"] : ($proxysecure ? 443 : 80));
 			$proxypath     = ($proxyurl["path"] == "" ? "/" : $proxyurl["path"]);
 			$proxyusername = $proxyurl["loginusername"];
