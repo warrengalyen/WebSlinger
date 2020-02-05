@@ -25,6 +25,10 @@ class MultiAsyncHelper {
 		}
 	}
 
+	public function NumObjects() {
+		return count($this->queued_objs) + count($this->objs);
+	}
+
 	public function GetObject($key) {
 		if (isset($this->queued_objs[$key])) {
 			$result = $this->queued_objs[$key]["obj"];
@@ -204,10 +208,10 @@ class MultiAsyncHelper {
 			$keep = false;
 			call_user_func_array($info["callback"], array("init", &$keep, $key, &$info["obj"]));
 
+			$this->objs[$key] = $info;
+
 			if (!$keep) {
 				$result2["removed"][$key] = $this->Remove($key);
-			} else {
-				$this->objs[$key] = $info;
 			}
 		}
 
@@ -260,7 +264,7 @@ class MultiAsyncHelper {
 						}
 
 						if (isset($this->objs[$key])) {
-							call_user_func_array($info["callback"], array(
+							call_user_func_array($this->objs[$key]["callback"], array(
 								"read",
 								&$fp,
 								$key,
@@ -286,7 +290,7 @@ class MultiAsyncHelper {
 						}
 
 						if (isset($this->objs[$key])) {
-							call_user_func_array($info["callback"], array(
+							call_user_func_array($this->objs[$key]["callback"], array(
 								"write",
 								&$fp,
 								$key,
