@@ -186,7 +186,7 @@ class HTTP {
 		$relative = (is_array($relativeurl) ? $relativeurl : self::ExtractURL($relativeurl));
 		$base     = (is_array($baseurl) ? $baseurl : self::ExtractURL($baseurl));
 
-		if ($relative["host"] != "") {
+		if ($relative["host"] != "" || ($relative["scheme"] != "" && $relative["scheme"] != $base["scheme"])) {
 			if ($relative["scheme"] == "") {
 				$relative["scheme"] = $base["scheme"];
 			}
@@ -1963,9 +1963,10 @@ class HTTP {
 			}
 			$proxyhost = str_replace(" ", "-", self::HeaderValueCleanup($proxyurl["host"]));
 			if ($proxyhost === "") {
-				return array("success"   => false,
-				             "error"     => self::HTTPTranslate("The specified proxy URL is not a URL.  Prefix 'proxyurl' with http:// or https://"),
-				             "errorcode" => "invalid_proxy_url"
+				return array(
+					"success"   => false,
+					"error"     => self::HTTPTranslate("The specified proxy URL is not a URL.  Prefix 'proxyurl' with http:// or https://"),
+					"errorcode" => "invalid_proxy_url"
 				);
 			}
 			$proxyport     = ((int) $proxyurl["port"] ? (int) $proxyurl["port"] : ($proxysecure ? 443 : 80));
