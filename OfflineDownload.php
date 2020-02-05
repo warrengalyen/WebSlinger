@@ -8,6 +8,8 @@ require_once "./support/multi_async_helper.php";
 @ini_set("memory_limit", "-1");
 
 class OfflineDownload {
+	protected $ignored_urls = [];
+
 	protected $linkdepth;
 	protected $destpath;
 	protected $initurl;
@@ -53,9 +55,15 @@ class OfflineDownload {
 	 */
 	protected $ops;
 
+	/**
+	 * @var bool
+	 */
+	protected $allow_x_domain;
 
-	public function __construct($folder_path, $url, $depth = false) {
-		$this->linkdepth = ($depth !== false) ? (int) $depth : $depth;
+	public function __construct($folder_path, $url, $depth = false, $allow_cross_domain = false, $ignored_urls = []) {
+		$this->ignored_urls   = $ignored_urls;
+		$this->allow_x_domain = $allow_cross_domain;
+		$this->linkdepth      = ($depth !== false) ? (int) $depth : $depth;
 
 		@mkdir($folder_path, 0770, true);
 		$this->destpath = realpath($folder_path);
@@ -149,17 +157,17 @@ class OfflineDownload {
 				"web"     => new WebBrowser(),
 				"options" => array(
 					"pre_retrievewebpage_callback" => [$this, "DisplayURL"]
-//                    "pre_retrievewebpage_callback" => "DisplayURL",
+					// "pre_retrievewebpage_callback" => "DisplayURL",
 				)
 			);
 
 			$this->ops[$key]["web"]->ProcessAsync($this->helper, $key, null, $this->initurl, $this->ops[$key]["options"]);
 
 			// Queue 'favicon.ico'.
-//		PrepareManifestResourceItem(false, ".ico", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/favicon.ico"));
+			// PrepareManifestResourceItem(false, ".ico", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/favicon.ico"));
 
 			// Queue 'robots.txt'.
-//		PrepareManifestResourceItem(false, ".txt", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/robots.txt"));
+			// PrepareManifestResourceItem(false, ".txt", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/robots.txt"));
 
 			$this->SaveQueues();
 		}
@@ -457,6 +465,14 @@ class OfflineDownload {
 
 	public function MapManifestResourceItem($parenturl, $url) {
 
+		// Ignore some urls.
+		$temp = strtolower($url);
+		foreach ($this->ignored_urls as $ignored_url) {
+			if (strpos($temp, strtolower($ignored_url)) !== false) {
+				return $url;
+			}
+		}
+
 		// Strip scheme if HTTP/HTTPS.  Otherwise, just return the URL as-is (e.g. mailto: and data: URIs).
 		if (strtolower(substr($url, 0, 7)) === "http://") {
 			$url2 = substr($url, 5);
@@ -725,20 +741,27 @@ class OfflineDownload {
 					$url2 = $this->MapManifestResourceItem($key, $url);
 					if ($url2 !== false) {
 						if ($row->Tag() === "iframe") {
-							$row->src = $url2 . $fragment;
+							$row->src = ($pos) ? $url2 . $fragment : $fragment;
 						} else {
-							$row->href = $fragment ?: $url2;
+							$row->href = ($pos) ? $url2 . $fragment : $fragment;
 						}
-//						else  $row->href = $url2 . $fragment;
+						//	ese  $row->href = $url2 . $fragment;
 					} else {
 						if ($row->Tag() === "iframe") {
-							$row->src = $url . $fragment;
+							$row->src = ($pos) ? $url . $fragment : $fragment;
 						} else {
-							$row->href = $url . $fragment;
+							$row->href = ($pos) ? $url . $fragment : $fragment;
 						}
 
-						if ($this->linkdepth === false || $this->ops[$key]["depth"] < $this->linkdepth) {
+						if ((!$this->allow_x_domain) && strpos(strtolower($url), str_replace([
+								'https://',
+								'http://'
+							], '', strtolower($this->initurl))) === false) {
+							echo "\nwe skipped $url  => $this->initurl  \n";
+
+						} elseif ($this->linkdepth === false || $this->ops[$key]["depth"] < $this->linkdepth) {
 							echo "\nanother url $url \n";
+
 							// Queue up another node.
 							$key2 = $url;
 
@@ -795,6 +818,7 @@ class OfflineDownload {
 	// Provides some basic feedback prior to retrieving each URL.
 	public function DisplayURL(&$state) {
 		echo "[" . number_format(count($this->ops), 0) . " ops] Retrieving '" . $state["url"] . "'...\n";
+
 		return true;
 	}
 }
