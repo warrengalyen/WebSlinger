@@ -4,7 +4,6 @@ require_once "./support/http.php";
 require_once "./support/web_browser.php";
 require_once "./support/tag_filter.php";
 require_once "./support/multi_async_helper.php";
-
 @ini_set("memory_limit", "-1");
 
 class OfflineDownload {
@@ -13,10 +12,6 @@ class OfflineDownload {
 	protected $linkdepth;
 	protected $destpath;
 	protected $initurl;
-	/**
-	 * @var array
-	 */
-	private $initurl2;
 	/**
 	 * @var array
 	 */
@@ -41,10 +36,6 @@ class OfflineDownload {
 	/**
 	 * @var array
 	 */
-	private $processedurls;
-	/**
-	 * @var array
-	 */
 	protected $manifest;
 	/**
 	 * @var array
@@ -54,19 +45,35 @@ class OfflineDownload {
 	 * @var array
 	 */
 	protected $ops;
-
 	/**
 	 * @var bool
 	 */
 	protected $allow_x_domain;
+	/**
+	 * @var string
+	 */
+	protected $log_file;
+	/**
+	 * @var array
+	 */
+	private $initurl2;
+	/**
+	 * @var array
+	 */
+	private $processedurls;
+	/**
+	 * @var string
+	 */
+	private $url_dir;
 
 	public function __construct($folder_path, $url, $depth = false, $allow_cross_domain = false, $ignored_urls = []) {
 		$this->ignored_urls   = $ignored_urls;
 		$this->allow_x_domain = $allow_cross_domain;
 		$this->linkdepth      = ($depth !== false) ? (int) $depth : $depth;
 
-		@mkdir($folder_path, 0770, true);
+		@mkdir($folder_path, 0777, true);
 		$this->destpath = realpath($folder_path);
+		$this->log_file = $this->destpath . DIRECTORY_SEPARATOR . "output.log";
 
 
 		// Alter input URL to remove potential attack vectors.
@@ -89,8 +96,7 @@ class OfflineDownload {
 		$this->opsfile      = $this->destpath . "/" . str_replace(":", "_", $this->initurl2["authority"]) . "_ops_" . md5(($this->linkdepth === false ? "-1" : $this->linkdepth) . "|" . $this->initurl) . ".json";
 
 		$this->destpath .= "/" . str_replace(":", "_", $this->initurl2["authority"]);
-		@mkdir($this->destpath, 0770, true);
-
+		@mkdir($this->destpath, 0777, true);
 
 		$this->helper = new MultiAsyncHelper();
 		$this->helper->SetConcurrencyLimit(4);
@@ -109,10 +115,20 @@ class OfflineDownload {
 
 		$this->ops = @json_decode(file_get_contents($this->opsfile), true);
 
-
+		$this->url_dir = strtolower(HTTP::ConvertRelativeToAbsoluteURL($this->initurl, "./"));
+		$this->url_dir = str_replace(['https://', 'http://'], '', $this->url_dir);
 	}
 
 	public function run() {
+
+		// TODO: find better way to do this
+		// output current progress or background process in case
+		// connection was lost before script could finish execution
+		if (file_exists($this->log_file) && php_sapi_name() !== "cli") {
+			echo str_replace([PHP_EOL, "\n"], ["<br>"], file_get_contents($this->log_file));
+			die();
+		}
+		$start = time();
 
 		foreach ($this->manifest as $key => $val) {
 			$vals = explode("/", $val);
@@ -157,17 +173,17 @@ class OfflineDownload {
 				"web"     => new WebBrowser(),
 				"options" => array(
 					"pre_retrievewebpage_callback" => [$this, "DisplayURL"]
-					// "pre_retrievewebpage_callback" => "DisplayURL",
+//                    "pre_retrievewebpage_callback" => "DisplayURL",
 				)
 			);
 
 			$this->ops[$key]["web"]->ProcessAsync($this->helper, $key, null, $this->initurl, $this->ops[$key]["options"]);
 
 			// Queue 'favicon.ico'.
-			// PrepareManifestResourceItem(false, ".ico", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/favicon.ico"));
+//		PrepareManifestResourceItem(false, ".ico", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/favicon.ico"));
 
 			// Queue 'robots.txt'.
-			// PrepareManifestResourceItem(false, ".txt", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/robots.txt"));
+//		PrepareManifestResourceItem(false, ".txt", HTTP::ConvertRelativeToAbsoluteURL($initurl, "/robots.txt"));
 
 			$this->SaveQueues();
 		}
@@ -185,13 +201,14 @@ class OfflineDownload {
 						$this->ops[$key]["web"]->ProcessAsync($this->helper, $key, null, $key, $info["tempoptions"]);
 					}
 
-					echo "Error retrieving URL (" . $key . ").  " . ($this->ops[$key]["retries"] > 0 ? "Retrying in a moment.  " : "") . $info["result"]["error"] . " (" . $info["result"]["errorcode"] . ")\n";
+					$this->sm("Error retrieving URL (" . $key . ").  " . ($this->ops[$key]["retries"] > 0 ? "Retrying in a moment.  " : "") . $info["result"]["error"] . " (" . $info["result"]["errorcode"] . ")\n");
 				} else {
-					echo "[" . number_format(count($this->ops), 0) . " ops] Processing '" . $key . "'.\n";
+
+					$this->sm("[" . number_format(count($this->ops), 0) . " ops] Processing '" . $key . "'.\n");
 
 					// Just report non-200 OK responses.  Store the data except for 404 errors.
 					if ($info["result"]["response"]["code"] != 200) {
-						echo "Error retrieving URL '" . $info["result"]["url"] . "'.\nServer returned:  " . $info["result"]["response"]["line"] . "\n";
+						$this->sm("Error retrieving URL '" . $info["result"]["url"] . "'.\nServer returned:  " . $info["result"]["response"]["line"] . "\n");
 					}
 
 					$this->opsdata[$key] = array(
@@ -240,9 +257,9 @@ class OfflineDownload {
 						$key2 = array_shift($process);
 
 						if ($this->opsdata[$key2]["httpcode"] >= 400) {
-							echo "[" . number_format(count($this->ops), 0) . " ops] Finalizing '" . $key2 . "'.\n";
+							$this->sm("[" . number_format(count($this->ops), 0) . " ops] Finalizing '" . $key2 . "'.\n");
 						} else {
-							echo "[" . number_format(count($this->ops), 0) . " ops] Saving '" . $key2 . "' to '" . $this->destpath . $this->opsdata[$key2]["path"] . "'.\n";
+							$this->sm("[" . number_format(count($this->ops), 0) . " ops] Saving '" . $key2 . "' to '" . $this->destpath . $this->opsdata[$key2]["path"] . "'.\n");
 
 							$this->manifest[str_replace(array(
 								"http://",
@@ -289,16 +306,16 @@ class OfflineDownload {
 
 		// Final message.
 		if (count($this->ops)) {
-			echo "Unable to process the following URLs:\n\n";
+			$this->sm("Unable to process the following URLs:\n\n");
 
 			foreach ($this->ops as $url => $info) {
-				echo "  " . $url . "\n";
+				$this->sm("  " . $url . "\n");
 			}
 
-			echo "\n";
-			echo "Done, with errors.\n";
+			$this->sm("\n");
+			$this->sm("Done, with errors.\n");
 		} else {
-			echo "Done.\n";
+			$this->sm("Done.\n");
 		}
 	}
 
@@ -319,6 +336,17 @@ class OfflineDownload {
 	}
 
 	// Calculates the static file extension based on the result of a HTTP request.
+
+	public function sm($msg) {
+		echo $msg;
+		// Store output progress to be fetched if script is run again with same parameter.
+		if (php_sapi_name() !== "cli") {
+			file_put_contents($this->log_file, $msg, FILE_APPEND);
+		}
+	}
+
+	// Attempt to create a roughly equivalent structure to the URL on the local filesystem for static serving later.
+
 	public function GetResultFileExtension(&$result) {
 		$mimeextmap = array(
 			"text/html"       => ".html",
@@ -394,7 +422,6 @@ class OfflineDownload {
 		return $fileext;
 	}
 
-	// Attempt to create a roughly-equivalent structure to the URL on the local filesystem for static serving later.
 	public function SetReverseManifestPath($key) {
 
 		$url2 = HTTP::ExtractURL($key);
@@ -442,7 +469,8 @@ class OfflineDownload {
 			$path .= "/";
 		}
 
-		@mkdir($this->destpath . $path, 0770, true);
+		@mkdir($this->destpath . $path, 0777, true);
+//        @mkdir($this->destpath . $path, 0770, true);
 
 		// And a clean filename.
 		$path .= $filename;
@@ -463,51 +491,175 @@ class OfflineDownload {
 		//var_dump($manifestrev);
 	}
 
-	public function MapManifestResourceItem($parenturl, $url) {
+	// Generates a leaf node and prevents the parent from completing until the document URLs are updated.
 
-		// Ignore some urls.
-		$temp = strtolower($url);
-		foreach ($this->ignored_urls as $ignored_url) {
-			if (strpos($temp, strtolower($ignored_url)) !== false) {
-				return $url;
+	public function ProcessContent($key, $final) {
+
+		if ($this->opsdata[$key]["httpcode"] >= 400) {
+			return;
+		}
+
+		// Process HTML, altering URLs as necessary.
+		if ($this->ops[$key]["type"] === "node" && $this->ops[$key]["ext"] === ".html") {
+			$html = TagFilter::Explode($this->opsdata[$key]["content"], $this->htmloptions);
+			$root = $html->Get();
+
+			$urlinfo = HTTP::ExtractURL($this->opsdata[$key]["url"]);
+
+			// Handle images.
+			$rows = $root->Find('img[src],img[srcset]');
+			foreach ($rows as $row) {
+				if (isset($row->src)) {
+					$url = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, $row->src);
+
+					$row->src = $this->PrepareManifestResourceItem($key, false, $url);
+				}
+
+				if (isset($row->srcset)) {
+					$urls  = explode(",", $row->srcset);
+					$urls2 = array();
+					foreach ($urls as $url) {
+						$url = trim($url);
+						$pos = strrpos($url, " ");
+						if ($pos !== false) {
+							$url2 = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, trim(substr($url, 0, $pos)));
+							$size = substr($url, $pos + 1);
+
+							$urls2[] = $this->PrepareManifestResourceItem($key, false, $url2) . " " . $size;
+						}
+					}
+
+					$row->srcset = implode(", ", $urls2);
+				}
+			}
+
+			// Handle link tags with hrefs.
+			$rows = $root->Find('link[href]');
+			foreach ($rows as $row) {
+				$url = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, $row->href);
+
+				$row->href = $this->PrepareManifestResourceItem($key, ((isset($row->rel) && strtolower($row->rel) === "stylesheet") || (isset($row->type) && strtolower($row->type) === "text/css") ? ".css" : false), $url);
+			}
+
+
+			// Handle external Javascript.
+			$rows = $root->Find('script[src]');
+			foreach ($rows as $row) {
+				$url = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, $row->src);
+
+				$row->src = $this->PrepareManifestResourceItem($key, ".js", $url);
+			}
+
+			// Handle style tags.
+			$rows = $root->Find('style');
+			foreach ($rows as $row) {
+				$children = $row->Children(true);
+				foreach ($children as $child) {
+					if ($child->Type() === "content") {
+						$child->Text($this->ProcessCSS($child->Text(), $key, $urlinfo));
+					}
+				}
+			}
+
+			// Handle inline styles.
+			$rows = $root->Find('[style]');
+			foreach ($rows as $row) {
+				$row->style = $this->ProcessCSS($row->style, $key, $urlinfo);
+			}
+
+			// Handle anchor tags and iframes.
+			$rows = $root->Find('a[href],iframe[src]');
+			foreach ($rows as $row) {
+				$url  = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, ($row->Tag() === "iframe" ? $row->src : $row->href));
+				$url2 = HTTP::ExtractURL($url);
+
+				// Only follow links on the same domain.
+				if (strcasecmp($url2["authority"], $this->initurl2["authority"]) == 0 && ($url2["scheme"] === "http" || $url2["scheme"] === "https")) {
+					if ($url2["path"] === "") {
+						$url2["path"] = "/";
+						$url          = HTTP::CondenseURL($url2);
+					}
+
+					$pos = strpos($url, "#");
+					if ($pos === false) {
+						$fragment = false;
+					} else {
+						$fragment = substr($url, $pos);
+						$url      = substr($url, 0, $pos);
+					}
+
+					$url2 = $this->MapManifestResourceItem($key, $url);
+					if ($url2 !== false) {
+						if ($row->Tag() === "iframe") {
+							$row->src = $url2 . $fragment;
+						} else {
+							$row->href = ($key === $url) ? $fragment : $url2 . $fragment;
+						}
+//						else  $row->href = $url2 . $fragment;
+					} else {
+						if ($row->Tag() === "iframe") {
+							$row->src = $url . $fragment;
+						} else {
+							$row->href = ($key === $url) ? $fragment : $url . $fragment;
+						}
+
+						if ($this->linkdepth === false || $this->ops[$key]["depth"] < $this->linkdepth) {
+
+							// Queue up another node.
+							$key2 = $url;
+
+							if (!isset($this->ops[$key2])) {
+								$this->ops[$key2] = array(
+									"type"    => "node",
+									"status"  => "download",
+									"depth"   => $this->ops[$key]["depth"] + 1,
+									"retries" => 3,
+									"ext"     => false,
+									"waiting" => array(),
+									"web"     => clone $this->ops[$key]["web"],
+									"options" => array(
+										"pre_retrievewebpage_callback" => [$this, "DisplayURL"]
+									)
+								);
+
+								$this->ops[$key]["web"]->ProcessAsync($this->helper, $key2, null, $url, $this->ops[$key2]["options"]);
+							}
+
+							if ($key !== $key2) {
+								if ($this->ops[$key]["status"] === "waiting") {
+									$this->ops[$key]["wait_refs"] ++;
+								} else {
+									$this->ops[$key]["status"]    = "waiting";
+									$this->ops[$key]["wait_refs"] = 1;
+								}
+
+								$this->ops[$key2]["waiting"][] = $key;
+							}
+						}
+					}
+				}
+			}
+
+			// Mix down the content back into HTML.
+			if ($final) {
+				$this->opsdata[$key]["content"] = $root->GetOuterHTML();
 			}
 		}
 
-		// Strip scheme if HTTP/HTTPS.  Otherwise, just return the URL as-is (e.g. mailto: and data: URIs).
-		if (strtolower(substr($url, 0, 7)) === "http://") {
-			$url2 = substr($url, 5);
-		} else if (strtolower(substr($url, 0, 8)) === "https://") {
-			$url2 = substr($url, 6);
-		} else {
-			return $url;
-		}
+		// Process CSS, altering URLs as necessary.
+		if ($this->ops[$key]["ext"] === ".css") {
+			$urlinfo = HTTP::ExtractURL($this->opsdata[$key]["url"]);
 
-		// If already processed and valid, return the relative reference to the path on disk.
-		if ($parenturl !== false && isset($this->opsdata[$parenturl]) && (isset($this->manifest[$url2]) || isset($this->opsdata[$url]))) {
-			$path  = explode("/", $this->opsdata[$parenturl]["path"]);
-			$path2 = explode("/", (isset($this->manifest[$url2]) ? $this->manifest[$url2] : $this->opsdata[$url]["path"]));
+			$result = $this->ProcessCSS($this->opsdata[$key]["content"], $key, $urlinfo);
 
-			array_pop($path);
-
-			while (count($path) && count($path2) && $path[0] === $path2[0]) {
-				array_shift($path);
-				array_shift($path2);
+			if ($final) {
+				$this->opsdata[$key]["content"] = $result;
 			}
-
-			$path2 = str_repeat("../", count($path)) . implode("/", $path2);
-
-			return $path2;
 		}
-
-		// If already processed but not valid (e.g. a 404 error), just return the URL.
-		if (isset($this->processedurls[$url])) {
-			return $url;
-		}
-
-		return false;
 	}
 
-	// Generates a leaf node and prevents the parent from completing until the document URLs are updated.
+	// Locate additional files to import in CSS.  Doesn't implement a state engine.
+
 	public function PrepareManifestResourceItem($parenturl, $forcedext, $url) {
 
 		$pos = strpos($url, "#");
@@ -560,7 +712,58 @@ class OfflineDownload {
 		return $url;
 	}
 
-	// Locate additional files to import in CSS.  Doesn't implement a state engine.
+	public function MapManifestResourceItem($parenturl, $url) {
+
+		//skip url if its not contained in the root of our base domain
+		if ((!$this->allow_x_domain) && strpos(strtolower($url), $this->url_dir) === false) {
+//            $this->sm( "\n we skipped $url  => $this->initurl  \n");
+			return $url;
+		}
+		//ignore some urls
+		$temp = strtolower($url);
+		foreach ($this->ignored_urls as $ignored_url) {
+			if (strpos($temp, strtolower($ignored_url)) !== false) {
+//                $this->sm( "\n we ignored $url  => $ignored_url  \n");
+				return $url;
+			}
+		}
+
+		// Strip scheme if HTTP/HTTPS.  Otherwise, just return the URL as-is (e.g. mailto: and data: URIs).
+		if (strtolower(substr($url, 0, 7)) === "http://") {
+			$url2 = substr($url, 5);
+		} else if (strtolower(substr($url, 0, 8)) === "https://") {
+			$url2 = substr($url, 6);
+		} else {
+			return $url;
+		}
+
+		// If already processed and valid, return the relative reference to the path on disk.
+		if ($parenturl !== false && isset($this->opsdata[$parenturl]) && (isset($this->manifest[$url2]) || isset($this->opsdata[$url]))) {
+			$path  = explode("/", $this->opsdata[$parenturl]["path"]);
+			$path2 = explode("/", (isset($this->manifest[$url2]) ? $this->manifest[$url2] : $this->opsdata[$url]["path"]));
+
+			array_pop($path);
+
+			while (count($path) && count($path2) && $path[0] === $path2[0]) {
+				array_shift($path);
+				array_shift($path2);
+			}
+
+			$path2 = str_repeat("../", count($path)) . implode("/", $path2);
+
+			return $path2;
+		}
+
+		// If already processed but not valid (e.g. a 404 error), just return the URL.
+		if (isset($this->processedurls[$url])) {
+			return $url;
+		}
+
+		return false;
+	}
+
+	// Provides some basic feedback prior to retrieving each URL.
+
 	public function ProcessCSS($css, $parenturl, $baseurl) {
 		$result = $css;
 
@@ -644,180 +847,9 @@ class OfflineDownload {
 		return $result;
 	}
 
-
-	public function ProcessContent($key, $final) {
-
-		if ($this->opsdata[$key]["httpcode"] >= 400) {
-			return;
-		}
-		// Process HTML, altering URLs as necessary.
-		if ($this->ops[$key]["type"] === "node" && $this->ops[$key]["ext"] === ".html") {
-			$html = TagFilter::Explode($this->opsdata[$key]["content"], $this->htmloptions);
-			$root = $html->Get();
-
-			$urlinfo = HTTP::ExtractURL($this->opsdata[$key]["url"]);
-
-			// Handle images.
-			$rows = $root->Find('img[src],img[srcset]');
-			foreach ($rows as $row) {
-				if (isset($row->src)) {
-					$url = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, $row->src);
-
-					$row->src = $this->PrepareManifestResourceItem($key, false, $url);
-				}
-
-				if (isset($row->srcset)) {
-					$urls  = explode(",", $row->srcset);
-					$urls2 = array();
-					foreach ($urls as $url) {
-						$url = trim($url);
-						$pos = strrpos($url, " ");
-						if ($pos !== false) {
-							$url2 = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, trim(substr($url, 0, $pos)));
-							$size = substr($url, $pos + 1);
-
-							$urls2[] = $this->PrepareManifestResourceItem($key, false, $url2) . " " . $size;
-						}
-					}
-
-					$row->srcset = implode(", ", $urls2);
-				}
-			}
-
-			// Handle link tags with hrefs.
-			$rows = $root->Find('link[href]');
-			foreach ($rows as $row) {
-				$url = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, $row->href);
-
-				$row->href = $this->PrepareManifestResourceItem($key, ((isset($row->rel) && strtolower($row->rel) === "stylesheet") || (isset($row->type) && strtolower($row->type) === "text/css") ? ".css" : false), $url);
-			}
-
-			// Handle external Javascript.
-			$rows = $root->Find('script[src]');
-			foreach ($rows as $row) {
-				$url = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, $row->src);
-
-				$row->src = $this->PrepareManifestResourceItem($key, ".js", $url);
-			}
-
-			// Handle style tags.
-			$rows = $root->Find('style');
-			foreach ($rows as $row) {
-				$children = $row->Children(true);
-				foreach ($children as $child) {
-					if ($child->Type() === "content") {
-						$child->Text($this->ProcessCSS($child->Text(), $key, $urlinfo));
-					}
-				}
-			}
-
-			// Handle inline styles.
-			$rows = $root->Find('[style]');
-			foreach ($rows as $row) {
-				$row->style = $this->ProcessCSS($row->style, $key, $urlinfo);
-			}
-
-			// Handle anchor tags and iframes.
-			$rows = $root->Find('a[href],iframe[src]');
-			foreach ($rows as $row) {
-				$url  = HTTP::ConvertRelativeToAbsoluteURL($urlinfo, ($row->Tag() === "iframe" ? $row->src : $row->href));
-				$url2 = HTTP::ExtractURL($url);
-
-				// Only follow links on the same domain.
-				if (strcasecmp($url2["authority"], $this->initurl2["authority"]) == 0 && ($url2["scheme"] === "http" || $url2["scheme"] === "https")) {
-					if ($url2["path"] === "") {
-						$url2["path"] = "/";
-						$url          = HTTP::CondenseURL($url2);
-					}
-
-					$pos = strpos($url, "#");
-					if ($pos === false) {
-						$fragment = "";
-					} else {
-						$fragment = substr($url, $pos);
-						$url      = substr($url, 0, $pos);
-					}
-
-					$url2 = $this->MapManifestResourceItem($key, $url);
-					if ($url2 !== false) {
-						if ($row->Tag() === "iframe") {
-							$row->src = ($pos) ? $url2 . $fragment : $fragment;
-						} else {
-							$row->href = ($pos) ? $url2 . $fragment : $fragment;
-						}
-						//	ese  $row->href = $url2 . $fragment;
-					} else {
-						if ($row->Tag() === "iframe") {
-							$row->src = ($pos) ? $url . $fragment : $fragment;
-						} else {
-							$row->href = ($pos) ? $url . $fragment : $fragment;
-						}
-
-						if ((!$this->allow_x_domain) && strpos(strtolower($url), str_replace([
-								'https://',
-								'http://'
-							], '', strtolower($this->initurl))) === false) {
-							echo "\nwe skipped $url  => $this->initurl  \n";
-
-						} elseif ($this->linkdepth === false || $this->ops[$key]["depth"] < $this->linkdepth) {
-							echo "\nanother url $url \n";
-
-							// Queue up another node.
-							$key2 = $url;
-
-							if (!isset($this->ops[$key2])) {
-								$this->ops[$key2] = array(
-									"type"    => "node",
-									"status"  => "download",
-									"depth"   => $this->ops[$key]["depth"] + 1,
-									"retries" => 3,
-									"ext"     => false,
-									"waiting" => array(),
-									"web"     => clone $this->ops[$key]["web"],
-									"options" => array(
-										"pre_retrievewebpage_callback" => [$this, "DisplayURL"]
-									)
-								);
-
-								$this->ops[$key]["web"]->ProcessAsync($this->helper, $key2, null, $url, $this->ops[$key2]["options"]);
-							}
-
-							if ($key !== $key2) {
-								if ($this->ops[$key]["status"] === "waiting") {
-									$this->ops[$key]["wait_refs"] ++;
-								} else {
-									$this->ops[$key]["status"]    = "waiting";
-									$this->ops[$key]["wait_refs"] = 1;
-								}
-
-								$this->ops[$key2]["waiting"][] = $key;
-							}
-						}
-					}
-				}
-			}
-
-			// Mix down the content back into HTML.
-			if ($final) {
-				$this->opsdata[$key]["content"] = $root->GetOuterHTML();
-			}
-		}
-
-		// Process CSS, altering URLs as necessary.
-		if ($this->ops[$key]["ext"] === ".css") {
-			$urlinfo = HTTP::ExtractURL($this->opsdata[$key]["url"]);
-
-			$result = $this->ProcessCSS($this->opsdata[$key]["content"], $key, $urlinfo);
-
-			if ($final) {
-				$this->opsdata[$key]["content"] = $result;
-			}
-		}
-	}
-
-	// Provides some basic feedback prior to retrieving each URL.
 	public function DisplayURL(&$state) {
-		echo "[" . number_format(count($this->ops), 0) . " ops] Retrieving '" . $state["url"] . "'...\n";
+
+		$this->sm("[" . number_format(count($this->ops), 0) . " ops] Retrieving '" . $state["url"] . "'...\n");
 
 		return true;
 	}
