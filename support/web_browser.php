@@ -310,7 +310,7 @@ class WebBrowser {
 					// Handle any 'Set-Cookie' headers.
 					if (isset($state["result"]["headers"]["Set-Cookie"])) {
 						foreach ($state["result"]["headers"]["Set-Cookie"] as $cookie) {
-							$items = explode("; ", $cookie);
+							$items = explode(";", $cookie);
 							$item  = trim(array_shift($items));
 							if ($item != "") {
 								$cookie2 = array();
