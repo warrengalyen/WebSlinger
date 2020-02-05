@@ -1085,8 +1085,8 @@ class TagFilterNode {
 		if (isset($this->tfn->nodes[$this->id]) && isset($this->tfn->nodes[$this->id]["attrs"])) {
 			if (is_array($val)) {
 				$this->tfn->nodes[$this->id]["attrs"][$key] = $val;
-			else if (isset($this->tfn->nodes[$this->id]["attrs"][$key]) && is_array($this->tfn->nodes[$this->id]["attrs"][$key])) {
-				$this->tfn->nodes[$this->id]["attrs"][$key][(string)$val] = (string)$val;
+			} else if (isset($this->tfn->nodes[$this->id]["attrs"][$key]) && is_array($this->tfn->nodes[$this->id]["attrs"][$key])) {
+				$this->tfn->nodes[$this->id]["attrs"][$key][(string) $val] = (string) $val;
 			} else {
 				$this->tfn->nodes[$this->id]["attrs"][$key] = (string) $val;
 			}
@@ -1128,6 +1128,14 @@ class TagFilterNode {
 
 	public function Tag() {
 		return $this->tfn->GetTag($this->id);
+	}
+
+	public function Text($val = null) {
+		if ($val !== null) {
+			$this->tfn->SetText($this->id, $val);
+		} else {
+			return $this->tfn->GetText($this->id);
+		}
 	}
 
 	public function AddClass($name, $attr = "class") {
@@ -2036,6 +2044,16 @@ class TagFilterNodes {
 		return (isset($this->nodes[$id]) && $this->nodes[$id]["type"] === "element" ? $this->nodes[$id]["tag"] : false);
 	}
 
+	public function SetText($id, $val) {
+		if (isset($this->nodes[$id]) && ($this->nodes[$id]["type"] === "content" || $this->nodes[$id]["type"] === "comment")) {
+			$this->nodes[$id]["text"] = (string) $val;
+		}
+	}
+
+	public function GetText($id) {
+		return (isset($this->nodes[$id]) && ($this->nodes[$id]["type"] === "content" || $this->nodes[$id]["type"] === "comment") ? $this->nodes[$id]["text"] : false);
+	}
+
 	public function Move($src, $newpid, $newpos) {
 		$newpid = (int) $newpid;
 		if (!isset($this->nodes[$newpid]) || !isset($this->nodes[$newpid]["children"]) || !is_array($this->nodes[$newpid]["children"])) {
@@ -2551,7 +2569,9 @@ class TagFilter {
 		$result = trim($result);
 		$result = self::CleanupResults($result);
 
-		if (function_exists("gc_mem_caches")) gc_mem_caches();
+		if (function_exists("gc_mem_caches")) {
+			gc_mem_caches();
+		}
 
 		return $result;
 	}
