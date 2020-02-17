@@ -512,7 +512,7 @@ Connecting to a SSL/TLS enabled server is fraught with difficulties.  SSL/TLS co
 * Network failures.  The server gives up because SSL/TLS is expensive on both local and remote system resources (mostly CPU), there is a temporary network condition (just retry the request), or the request is being actively blocked by a firewall (e.g. port blocking for a range of abusive IPs).
 * The server (or client) SSL/TLS certificate is incomplete or does not validate against a known root CA certificate list.
 * The server (or client) SSL/TLS certificate has expired.  Not much can be done here except completely disable SSL validation.
-* A bug in  exposed due to underlying TLS bugs in PHP.  This is really rare though.
+* A bug in WebSlinger exposed due to underlying TLS bugs in PHP.  This is really rare though.
 
 PHP does not expose much of the underlying SSL/TLS layer to applications when establishing connections, which makes it incredibly difficult to diagnose certain issues with SSL/TLS.  To diagnose network related problems, use the 'openssl s_client' command line tool from the same host the problematic script is running on.  Setting the "cafile", "auto_cn_match", and "auto_sni" SSL options may help too.
 
@@ -598,7 +598,7 @@ Another useful tip is to be aware of URLs for detail pages.  For example, when v
 Offline Downloading
 -------------------
 
-Included with  is an [example script](run_offline_download_example.php) to download a website starting at a specified URL.  The script demonstrates bulk concurrent downloading and processing of HTML, CSS, images, Javascript, and other files almost like a web browser would do.
+Included with WebSlinger is an [example script](run_offline_download_example.php) to download a website starting at a specified URL.  The script demonstrates bulk concurrent downloading and processing of HTML, CSS, images, Javascript, and other files almost like a web browser would do.
 
 Example usage:
 
@@ -615,7 +615,7 @@ There are some limitations.  For example, any files loaded via Javascript won't 
 Limitations
 -----------
 
-The only real limitation with  is its inability to process Javascript.  A simple regex here and there to extract data hardcoded via Javascript usually works well enough.
+The only real limitation with WebSlinger is its inability to process Javascript.  A simple regex here and there to extract data hardcoded via Javascript usually works well enough.
 
 For the 0.5% of websites where there is useful content to scrape but the entire page content is generated using Javascript or is protected by Javascript in unusual ways, a real web browser is required.  Fortunately, there is [PhantomJS](http://phantomjs.org/) (headless Webkit), which can be scripted (i.e. automated) to handle the aforementioned Javascript-heavy sites.  However, PhantomJS is rather resource intensive and slooooow.  After all, PhantomJS emulates a real web browser which includes the full startup sequence and then it proceeds to download the entire page's content.  That, in turn, can take hundreds of requests to complete and can easily include downloading things such as ads.
 

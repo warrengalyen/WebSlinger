@@ -1,6 +1,5 @@
 <?php
 // Interactive command-line test.
-// 
 
 if (!isset($_SERVER["argc"]) || !$_SERVER["argc"])
 {
